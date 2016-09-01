@@ -42,13 +42,12 @@ using namespace std;
 
 const std::string ADDRESS("tcp://localhost:1883");
 const std::string CLIENTID("AsyncSubcriber");
-const std::string TOPIC("hello");
+const std::string TOPIC("Tz/MagBin");
 
 const int  QOS = 1;
 const long TIMEOUT = 10000L;
 
 /////////////////////////////////////////////////////////////////////////////
-void sql_write(mqtt::message_ptr msg_mqtt);
 
 class action_listener : public virtual mqtt::iaction_listener
 {
@@ -75,7 +74,7 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////
-
+void sql_write(std::string msg_mqtt);
 class callback : public virtual mqtt::callback,
 					public virtual mqtt::iaction_listener
 
@@ -127,7 +126,7 @@ class callback : public virtual mqtt::callback,
 		std::cout << "Message arrived" << std::endl;
 		std::cout << "\ttopic: '" << topic << "'" << std::endl;
 		std::cout << "\t'" << msg->to_str() << "'\n" << std::endl;
-                sql_write(msg);
+                sql_write(msg->to_str());
 	}
 
 	virtual void delivery_complete(mqtt::idelivery_token_ptr token) {}
@@ -178,9 +177,9 @@ int main(int argc, char* argv[])
  	return 0;
 }
 
-void sql_write(mqtt::message_ptr msg_mqtt){
+void sql_write(std::string msg_mqtt){
              
-            std::cout << "message from mqtt, ready to db " << msg_mqtt->to_str() << "'\n" << std::endl;
+            std::cout << "message from mqtt, ready to db " << msg_mqtt<< "'\n" << std::endl;
             string url(EXAMPLE_HOST);
             const string user(EXAMPLE_USER);
             const string pass(EXAMPLE_PASS);
@@ -207,19 +206,19 @@ void sql_write(mqtt::message_ptr msg_mqtt){
 
                     /* Create a test table demonstrating the use of sql::Statement.execute() */
                     stmt->execute("USE " + database);
-                    stmt->execute("DROP TABLE IF EXISTS session");
-                    stmt->execute("CREATE TABLE session(id int NOT NULL AUTO_INCREMENT, sessionName CHAR(50), PRIMARY KEY(ID))");
-                    cout << "#\t session table created" << endl;
+                    //stmt->execute("DROP TABLE IF EXISTS session");
+                    //stmt->execute("CREATE TABLE session(id int NOT NULL AUTO_INCREMENT, sessionName CHAR(50), PRIMARY KEY(ID))");
+                    //cout << "#\t session table created" << endl;
 
                     /* Populate the test table with data */
-                    if (msg_mqtt->to_str() != "") {
+                    if (msg_mqtt != "") {
                             /*
                             KLUDGE: You should take measures against SQL injections!
                             example.h contains the test data
                             */
                             sql.str("");
                             sql << "INSERT INTO session(sessionName) VALUES (";
-                            sql << "'" << msg_mqtt->to_str() << "')";
+                            sql << "'" << msg_mqtt << "')";
                             stmt->execute(sql.str());
                     }
 //                        cout << "#\t session table populated" << endl;
