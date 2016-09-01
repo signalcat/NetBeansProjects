@@ -1,0 +1,18 @@
+/*This is the mySQL script to create:*/
+/*session table*/
+/*magData table*/
+
+
+CREATE TABLE sessions (
+	sessionID INT NOT NULL AUTO_INCREMENT,
+	sessionName CHAR(30) NOT NULL,
+	PRIMARY KEY (sessionID)
+);
+
+CREATE TABLE magData( 
+	magDataID INT NOT NULL AUTO_INCREMENT, 
+	mag1Value float,
+	sessionID INT,
+	PRIMARY KEY (magDataID),
+	FOREIGN KEY (sessionID) REFERENCES sessions(sessionID) 
+);
