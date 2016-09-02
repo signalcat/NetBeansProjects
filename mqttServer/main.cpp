@@ -136,6 +136,14 @@ public:
 				: cli_(cli), listener_(listener) {}
 };
 
+class MfamPacket_decoder {
+    public:    
+        void print(string);
+};
+void MfamPacket_decoder::print(string data_in){
+    cout << "This is the test!!!!! " << data_in << endl;
+}
+
 /////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
@@ -209,7 +217,9 @@ void sql_write(std::string msg_mqtt){
                     //stmt->execute("DROP TABLE IF EXISTS session");
                     //stmt->execute("CREATE TABLE session(id int NOT NULL AUTO_INCREMENT, sessionName CHAR(50), PRIMARY KEY(ID))");
                     //cout << "#\t session table created" << endl;
-
+                    MfamPacket_decoder decoder;
+                    decoder.print(msg_mqtt);
+                    
                     /* Populate the test table with data */
                     if (msg_mqtt != "") {
                             /*
