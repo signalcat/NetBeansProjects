@@ -28,6 +28,11 @@
 #include <stdexcept>
 #include <boost/scoped_ptr.hpp>
 
+#include <bitset>
+#include <fstream>
+
+#include "myGmMfamData.h"
+#include <stdint.h>
 /*
   Public interface of the MySQL Connector/C++.
   You might not use it but directly include directly the different
@@ -136,12 +141,42 @@ public:
 				: cli_(cli), listener_(listener) {}
 };
 
+//Decode the IndexedMfamSpiPacketWithHeader. Struct definition is in GmMfamData.hpp
 class MfamPacket_decoder {
+    IndexedMfamSpiPacketWithHeader myMfamPacket;
+    int dwRecordType_size = sizeof(myMfamPacket.dwRecordType);
+    int uRecordSize_size = sizeof(myMfamPacket.uRecordSize);
+    //int imspData_size = sizeof();
+    int uiPacketIndex_size = sizeof(myMfamPacket.imspData.piIndex.uiPacketIndex);
+    int frameid_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.frameid);
+    int sysstat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.sysstat);
+    int mag1data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1data);
+    int mag1stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1stat);
+    int mag2stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2stat);
+    int mag2data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2data);
+    int auxsenx_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenx);
+    int auxseny_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxseny);
+    int auxsenz_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenz);
+    int auxsent_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsent);
+    
     public:    
         void print(string);
 };
 void MfamPacket_decoder::print(string data_in){
-    cout << "This is the test!!!!! " << data_in << endl;
+    
+    ofstream MfamData_txt ("/home/rzhang/MfamData.txt");
+    std::string test="";
+    for (std::size_t i=0; i < data_in.size(); ++i){
+        cout << bitset<8>(data_in.c_str()[i]) << endl;
+        if(MfamData_txt.is_open()){
+            
+            if(i < dwRecordType_size){
+                test += bitset<8>(data_in.c_str()[i]).to_string();     
+            }
+        }
+    }MfamData_txt << test << endl; myMfamPacket.dwRecordType = std::strtoul(test.c_str(), NULL, 0); 
+    
+    MfamData_txt.close();
 }
 
 /////////////////////////////////////////////////////////////////////////////
