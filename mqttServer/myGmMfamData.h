@@ -14,8 +14,9 @@
 #ifndef MYGMMFAMDATA_H
 #define MYGMMFAMDATA_H
 
+//32bits actually.
 #ifndef DWORD
-typedef unsigned long DWORD;
+typedef uint32_t DWORD;
 #endif
 
 #include <cstdint>

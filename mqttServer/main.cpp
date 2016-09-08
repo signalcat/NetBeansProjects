@@ -33,6 +33,7 @@
 
 #include "myGmMfamData.h"
 #include <stdint.h>
+#include <cstdint>
 /*
   Public interface of the MySQL Connector/C++.
   You might not use it but directly include directly the different
@@ -47,7 +48,7 @@ using namespace std;
 
 const std::string ADDRESS("tcp://localhost:1883");
 const std::string CLIENTID("AsyncSubcriber");
-const std::string TOPIC("Tz/MagBin");
+const std::string TOPIC("hello");
 
 const int  QOS = 1;
 const long TIMEOUT = 10000L;
@@ -79,7 +80,12 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////
+//Decode the IndexedMfamSpiPacketWithHeader. Struct definition is in GmMfamData.hpp
+void MfamPacket_decoder(string data_in);
+
+//write the data into db
 void sql_write(std::string msg_mqtt);
+
 class callback : public virtual mqtt::callback,
 					public virtual mqtt::iaction_listener
 
@@ -131,6 +137,7 @@ class callback : public virtual mqtt::callback,
 		std::cout << "Message arrived" << std::endl;
 		std::cout << "\ttopic: '" << topic << "'" << std::endl;
 		std::cout << "\t'" << msg->to_str() << "'\n" << std::endl;
+                MfamPacket_decoder(msg->to_str());
                 sql_write(msg->to_str());
 	}
 
@@ -141,43 +148,6 @@ public:
 				: cli_(cli), listener_(listener) {}
 };
 
-//Decode the IndexedMfamSpiPacketWithHeader. Struct definition is in GmMfamData.hpp
-class MfamPacket_decoder {
-    IndexedMfamSpiPacketWithHeader myMfamPacket;
-    int dwRecordType_size = sizeof(myMfamPacket.dwRecordType);
-    int uRecordSize_size = sizeof(myMfamPacket.uRecordSize);
-    //int imspData_size = sizeof();
-    int uiPacketIndex_size = sizeof(myMfamPacket.imspData.piIndex.uiPacketIndex);
-    int frameid_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.frameid);
-    int sysstat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.sysstat);
-    int mag1data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1data);
-    int mag1stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1stat);
-    int mag2stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2stat);
-    int mag2data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2data);
-    int auxsenx_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenx);
-    int auxseny_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxseny);
-    int auxsenz_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenz);
-    int auxsent_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsent);
-    
-    public:    
-        void print(string);
-};
-void MfamPacket_decoder::print(string data_in){
-    
-    ofstream MfamData_txt ("/home/rzhang/MfamData.txt");
-    std::string test="";
-    for (std::size_t i=0; i < data_in.size(); ++i){
-        cout << bitset<8>(data_in.c_str()[i]) << endl;
-        if(MfamData_txt.is_open()){
-            
-            if(i < dwRecordType_size){
-                test += bitset<8>(data_in.c_str()[i]).to_string();     
-            }
-        }
-    }MfamData_txt << test << endl; myMfamPacket.dwRecordType = std::strtoul(test.c_str(), NULL, 0); 
-    
-    MfamData_txt.close();
-}
 
 /////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
@@ -220,6 +190,57 @@ int main(int argc, char* argv[])
  	return 0;
 }
 
+void MfamPacket_decoder(string data_in){
+    
+    IndexedMfamSpiPacketWithHeader myMfamPacket;
+    int myMfamPacket_size = sizeof(myMfamPacket);
+    int dwRecordType_size = sizeof(myMfamPacket.dwRecordType);
+    int uRecordSize_size = sizeof(myMfamPacket.uRecordSize);
+    int uiPacketIndex_size = sizeof(myMfamPacket.imspData.piIndex.uiPacketIndex);
+    int frameid_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.frameid);
+    int sysstat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.sysstat);
+    int mag1data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1data);
+    int mag1stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1stat);
+    int mag2stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2stat);
+    int mag2data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2data);
+    int auxsenx_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenx);
+    int auxseny_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxseny);
+    int auxsenz_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenz);
+    int auxsent_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsent);
+    
+    //get the index of positions to deconstruct the whole binary stream
+    int lstIdx_RecordType = dwRecordType_size;  
+    int lstIdx_RecordSize = lstIdx_RecordType + uRecordSize_size;
+    int lstIdx_PacketIndex =  lstIdx_RecordSize + uiPacketIndex_size;    
+    
+    ofstream MfamData_txt ("/home/rzhang/MfamData.txt");
+    std::string sRecordType = "";
+    std::string sRecordSize = "";
+    std::string sPacketIndex = "";
+    std::string sMfamSpiPacket = "";
+    
+    for (std::size_t i=0; i < data_in.size(); ++i){
+        cout << bitset<8>(data_in.c_str()[i]) << endl;
+        if(MfamData_txt.is_open()){
+            if(i < lstIdx_RecordType){
+                sRecordType += bitset<8>(data_in.c_str()[i]).to_string();     
+            }else if(i >= lstIdx_RecordType && i < lstIdx_RecordSize){
+                sRecordSize += bitset<8>(data_in.c_str()[i]).to_string();
+            }else if(i >= lstIdx_RecordSize && i < lstIdx_PacketIndex){
+                sPacketIndex += bitset<8>(data_in.c_str()[i]).to_string();
+            }else{
+                sMfamSpiPacket += bitset<8>(data_in.c_str()[i]).to_string();
+            }
+        }
+    }
+    MfamData_txt << "Record Type: " << sRecordType << endl; 
+    MfamData_txt << "Record Size: " << sRecordSize << endl;
+    MfamData_txt << "PacketIndex: " << sPacketIndex << endl;
+    MfamData_txt << "MfamSpiPacket: " << sMfamSpiPacket << endl;
+    //myMfamPacket.dwRecordType = std::strtoul(test.c_str(), NULL, 0); 
+    MfamData_txt.close();
+}
+
 void sql_write(std::string msg_mqtt){
              
             std::cout << "message from mqtt, ready to db " << msg_mqtt<< "'\n" << std::endl;
@@ -252,8 +273,6 @@ void sql_write(std::string msg_mqtt){
                     //stmt->execute("DROP TABLE IF EXISTS session");
                     //stmt->execute("CREATE TABLE session(id int NOT NULL AUTO_INCREMENT, sessionName CHAR(50), PRIMARY KEY(ID))");
                     //cout << "#\t session table created" << endl;
-                    MfamPacket_decoder decoder;
-                    decoder.print(msg_mqtt);
                     
                     /* Populate the test table with data */
                     if (msg_mqtt != "") {
