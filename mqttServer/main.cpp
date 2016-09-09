@@ -31,7 +31,6 @@
 #include <bitset>
 #include <fstream>
 
-#include "myGmMfamData.h"
 #include <stdint.h>
 #include <cstdint>
 /*
@@ -43,6 +42,7 @@
 #include <mysql_public_iface.h>
 ///* Connection parameter and sample data *
 #include "createTable_session.h"
+#include "myGmMfamData.h"
 
 using namespace std;
 
@@ -81,10 +81,16 @@ public:
 
 /////////////////////////////////////////////////////////////////////////////
 //Decode the IndexedMfamSpiPacketWithHeader. Struct definition is in GmMfamData.hpp
-void MfamPacket_decoder(string data_in);
+struct MfamPacket_unpacked{
+        std::string sRecordType = "";
+        std::string sRecordSize = "";
+        std::string sPacketIndex = "";
+        std::string sMfamSpiPacket = "";   
+    } MfamPacketToDB;
+MfamPacket_unpacked MfamPacket_decoder(string data_in);
 
 //write the data into db
-void sql_write(std::string msg_mqtt);
+void sql_write(MfamPacket_unpacked MfamPacketToDB);
 
 class callback : public virtual mqtt::callback,
 					public virtual mqtt::iaction_listener
@@ -93,7 +99,8 @@ class callback : public virtual mqtt::callback,
 	int nretry_;
 	mqtt::async_client& cli_;
 	action_listener& listener_;
-
+        
+        
 	void reconnect() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		mqtt::connect_options connOpts;
@@ -137,8 +144,8 @@ class callback : public virtual mqtt::callback,
 		std::cout << "Message arrived" << std::endl;
 		std::cout << "\ttopic: '" << topic << "'" << std::endl;
 		std::cout << "\t'" << msg->to_str() << "'\n" << std::endl;
-                MfamPacket_decoder(msg->to_str());
-                sql_write(msg->to_str());
+                MfamPacketToDB = MfamPacket_decoder(msg->to_str());
+                sql_write(MfamPacketToDB);
 	}
 
 	virtual void delivery_complete(mqtt::idelivery_token_ptr token) {}
@@ -190,77 +197,71 @@ int main(int argc, char* argv[])
  	return 0;
 }
 
-void MfamPacket_decoder(string data_in){
+MfamPacket_unpacked MfamPacket_decoder(string data_in){
     
     IndexedMfamSpiPacketWithHeader myMfamPacket;
-    int myMfamPacket_size = sizeof(myMfamPacket);
+//    int myMfamPacket_size = sizeof(myMfamPacket);
     int dwRecordType_size = sizeof(myMfamPacket.dwRecordType);
     int uRecordSize_size = sizeof(myMfamPacket.uRecordSize);
     int uiPacketIndex_size = sizeof(myMfamPacket.imspData.piIndex.uiPacketIndex);
-    int frameid_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.frameid);
-    int sysstat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.sysstat);
-    int mag1data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1data);
-    int mag1stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag1stat);
-    int mag2stat_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2stat);
-    int mag2data_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.mag2data);
-    int auxsenx_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenx);
-    int auxseny_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxseny);
-    int auxsenz_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsenz);
-    int auxsent_size = sizeof(myMfamPacket.imspData.spMFAMSpiPacket.auxsent);
     
     //get the index of positions to deconstruct the whole binary stream
     int lstIdx_RecordType = dwRecordType_size;  
     int lstIdx_RecordSize = lstIdx_RecordType + uRecordSize_size;
     int lstIdx_PacketIndex =  lstIdx_RecordSize + uiPacketIndex_size;    
     
+    //open a txt file to store the data
     ofstream MfamData_txt ("/home/rzhang/MfamData.txt");
-    std::string sRecordType = "";
-    std::string sRecordSize = "";
-    std::string sPacketIndex = "";
-    std::string sMfamSpiPacket = "";
     
+    //iterate through the whole data stream and cut it into pieces
     for (std::size_t i=0; i < data_in.size(); ++i){
         cout << bitset<8>(data_in.c_str()[i]) << endl;
         if(MfamData_txt.is_open()){
             if(i < lstIdx_RecordType){
-                sRecordType += bitset<8>(data_in.c_str()[i]).to_string();     
+                MfamPacketToDB.sRecordType += bitset<8>(data_in.c_str()[i]).to_string();     
             }else if(i >= lstIdx_RecordType && i < lstIdx_RecordSize){
-                sRecordSize += bitset<8>(data_in.c_str()[i]).to_string();
+                MfamPacketToDB.sRecordSize += bitset<8>(data_in.c_str()[i]).to_string();
             }else if(i >= lstIdx_RecordSize && i < lstIdx_PacketIndex){
-                sPacketIndex += bitset<8>(data_in.c_str()[i]).to_string();
+                MfamPacketToDB.sPacketIndex += bitset<8>(data_in.c_str()[i]).to_string();
             }else{
-                sMfamSpiPacket += bitset<8>(data_in.c_str()[i]).to_string();
+                MfamPacketToDB.sMfamSpiPacket += bitset<8>(data_in.c_str()[i]).to_string();
             }
         }
     }
-    MfamData_txt << "Record Type: " << sRecordType << endl; 
-    MfamData_txt << "Record Size: " << sRecordSize << endl;
-    MfamData_txt << "PacketIndex: " << sPacketIndex << endl;
-    MfamData_txt << "MfamSpiPacket: " << sMfamSpiPacket << endl;
+    
+    //write out to txt file
+    MfamData_txt << "Record Type: " << MfamPacketToDB.sRecordType << endl; 
+    MfamData_txt << "Record Size: " << MfamPacketToDB.sRecordSize << endl;
+    MfamData_txt << "PacketIndex: " << MfamPacketToDB.sPacketIndex << endl;
+    MfamData_txt << "MfamSpiPacket: " << MfamPacketToDB.sMfamSpiPacket << endl;
     //myMfamPacket.dwRecordType = std::strtoul(test.c_str(), NULL, 0); 
     MfamData_txt.close();
+    
+    return MfamPacketToDB;
+
 }
 
-void sql_write(std::string msg_mqtt){
-             
-            std::cout << "message from mqtt, ready to db " << msg_mqtt<< "'\n" << std::endl;
-            string url(EXAMPLE_HOST);
-            const string user(EXAMPLE_USER);
-            const string pass(EXAMPLE_PASS);
-            const string database(EXAMPLE_DB);
+void sql_write(struct MfamPacket_unpacked MfamPacketToDB){
+    std::cout << "MfamData Package to db: " << MfamPacketToDB.sRecordType<< "'\n" << std::endl;
+    std::cout << "MfamData Package to db: " << MfamPacketToDB.sRecordSize<< "'\n" << std::endl;
+    std::cout << "MfamData Package to db: " << MfamPacketToDB.sPacketIndex<< "'\n" << std::endl;
+    std::cout << "MfamData Package to db: " << MfamPacketToDB.sMfamSpiPacket<< "'\n" << std::endl;
+            
+    string url(EXAMPLE_HOST);
+    const string user(EXAMPLE_USER);
+    const string pass(EXAMPLE_PASS);
+    const string database(EXAMPLE_DB);
 
-            /* sql::ResultSet.rowsCount() returns size_t */
-            size_t row;
-            stringstream sql;
-            stringstream msg;
-            int i, affected_rows;
+    size_t row;
+    stringstream sql;
+    stringstream msg;
+    int i, affected_rows;
 
             cout << boolalpha;
             cout << "1..1" << endl;
             cout << "# Connector/C++ connect basic usage example.." << endl;
             cout << "#" << endl;
 
-//            try {
                     sql::Driver * driver = sql::mysql::get_driver_instance();
                     /* Using the Driver to create a connection */
                     boost::scoped_ptr< sql::Connection > con(driver->connect(url, user, pass));
@@ -270,88 +271,15 @@ void sql_write(std::string msg_mqtt){
 
                     /* Create a test table demonstrating the use of sql::Statement.execute() */
                     stmt->execute("USE " + database);
-                    //stmt->execute("DROP TABLE IF EXISTS session");
-                    //stmt->execute("CREATE TABLE session(id int NOT NULL AUTO_INCREMENT, sessionName CHAR(50), PRIMARY KEY(ID))");
-                    //cout << "#\t session table created" << endl;
-                    
+                                       
                     /* Populate the test table with data */
-                    if (msg_mqtt != "") {
-                            /*
-                            KLUDGE: You should take measures against SQL injections!
-                            example.h contains the test data
-                            */
                             sql.str("");
-                            sql << "INSERT INTO session(sessionName) VALUES (";
-                            sql << "'" << msg_mqtt << "')";
+                            sql << "INSERT INTO magData(RecordType,RecordSize,PacketIndex,MfamSpiPacket,sessionID) VALUES (";
+                            sql << "'" << MfamPacketToDB.sRecordType << "','" << MfamPacketToDB.sRecordSize << "','" 
+                                << MfamPacketToDB.sPacketIndex << "','" << MfamPacketToDB.sMfamSpiPacket << "'," << "1)";
+                            cout << sql.str();
                             stmt->execute(sql.str());
-                    }
-//                        cout << "#\t session table populated" << endl;
-//                        {
-//                                /*
-//                                Run a query which returns exactly one result set like SELECT
-//                                Stored procedures (CALL) may return more than one result set
-//                                */
-//                                boost::scoped_ptr< sql::ResultSet > res(stmt->executeQuery("SELECT id, sessionName FROM session ORDER BY id ASC"));
-//                                cout << "#\t Running 'SELECT id, sessionName FROM session ORDER BY id ASC'" << endl;
-//
-//                                /* Number of rows in the result set */
-//                                cout << "#\t\t Number of rows\t";
-//                                cout << "res->rowsCount() = " << res->rowsCount() << endl;
-//                                if (res->rowsCount() != EXAMPLE_NUM_TEST_ROWS) {
-//                                        msg.str("");
-//                                        msg << "Expecting " << EXAMPLE_NUM_TEST_ROWS << "rows, found " << res->rowsCount();
-//                                        throw runtime_error(msg.str());
-//                                }
-//
-//                                /* Fetching data */
-//                                row = 0;
-//                                while (res->next()) {
-//                                        cout << "#\t\t Fetching row " << row << "\t";
-//                                        /* You can use either numeric offsets... */
-//                                        cout << "id = " << res->getInt(1);
-//                                        /* ... or column names for accessing results. The latter is recommended. */
-//                                        cout << ", sessionName = '" << res->getString("sessionName") << "'" << endl;
-//                                        row++;
-//                                }
-//                        }
 
-//                        {
-//                                /* Fetching again but using type convertion methods */
-//                                boost::scoped_ptr< sql::ResultSet > res(stmt->executeQuery("SELECT id FROM session ORDER BY id DESC"));
-//                                cout << "#\t Fetching 'SELECT id FROM session ORDER BY id DESC' using type conversion" << endl;
-//                                row = 0;
-//                                while (res->next()) {
-//                                        cout << "#\t\t Fetching row " << row;
-//                                        cout << "#\t id (int) = " << res->getInt("id");
-//                                        cout << "#\t id (boolean) = " << res->getBoolean("id");
-//                                        cout << "#\t id (long) = " << res->getInt64("id") << endl;
-//                                        row++;
-//                                }
-//                        }
-
-//                    /* Usage of UPDATE */
-//                    stmt->execute("INSERT INTO session(id, sessionName) VALUES (100, 'z')");
-//                    affected_rows = stmt->executeUpdate("UPDATE session SET sessionName = 'y' WHERE id = 100");
-//                    cout << "#\t UPDATE indicates " << affected_rows << " affected rows" << endl;
-//                    if (affected_rows != 1) {
-//                            msg.str("");
-//                            msg << "Expecting one row to be changed, but " << affected_rows << "change(s) reported";
-//                            throw runtime_error(msg.str());
-//                    }
-//
-//                    {
-//                            boost::scoped_ptr< sql::ResultSet > res(stmt->executeQuery("SELECT id, sessionName FROM session WHERE id = 100"));
-//
-//                            res->next();
-//                            if ((res->getInt("id") != 100) || (res->getString("sessionName") != "y")) {
-//                                    msg.str("Update must have failed, expecting 100/y got");
-//                                    msg << res->getInt("id") << "/" << res->getString("sessionName");
-//                                    throw runtime_error(msg.str());
-//                            }
-//
-//                            cout << "#\t\t Expecting id = 100, sessionName = 'y' and got id = " << res->getInt("id");
-//                            cout << ", sessionName = '" << res->getString("sessionName") << "'" << endl;
-//                    }
 
                     
                         /* Clean up */
